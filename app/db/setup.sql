@@ -1,33 +1,29 @@
--- This file contains the SQL schema, it drops all tables and recreates them
-
+-- Drop tables if they exist
 DROP TABLE IF EXISTS employees;
 DROP TABLE IF EXISTS timesheets;
-
--- To add a field to a table do
--- CREATE TABLE table_name (
---     id INTEGER PRIMARY KEY AUTOINCREMENT,
---     nullable_field TEXT,
---     non_nullable_field TEXT NOT NULL,
---     numeric_field INTEGER,
---     unique_field TEXT UNIQUE,
---     unique_non_nullable_field TEXT NOT NULL UNIQUE,
---     date_field DATE,
---     datetime_field DATETIME
--- );
 
 -- Create employees table
 CREATE TABLE employees (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    full_name TEXT NULL
-    -- Rest of the fields
+    full_name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    phone TEXT NOT NULL,
+    date_of_birth TEXT NOT NULL, -- Use TEXT to store date in 'YYYY-MM-DD' format (SQLite best practice)
+    job_title TEXT NOT NULL,
+    department TEXT NOT NULL,
+    salary REAL NOT NULL,
+    start_date TEXT NOT NULL, -- Use TEXT for date format storage
+    end_date TEXT NULL, -- Optional end date
+    photo_path TEXT NULL, -- Path to employee photo
+    document_path TEXT NULL -- Path to employee documents (Bonus)
 );
 
 -- Create timesheets table
 CREATE TABLE timesheets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    -- Rest of the fields
-    start_time DATETIME NOT NULL,
-    end_time DATETIME NOT NULL,
     employee_id INTEGER NOT NULL,
-    FOREIGN KEY (employee_id) REFERENCES employees(id)
+    start_time TEXT NOT NULL, -- Store date and time as ISO format (e.g., 'YYYY-MM-DDTHH:MM:SS')
+    end_time TEXT NOT NULL,
+    summary TEXT NULL, -- Optional work summary
+    FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE -- Cascade delete to remove timesheets if an employee is deleted
 );

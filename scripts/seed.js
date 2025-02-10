@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
 import { fileURLToPath } from 'url';
+import { faker } from "@faker-js/faker";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,60 +17,79 @@ const {
 
 const db = new sqlite3.Database(sqlitePath);
 
-const employees = [
-  {
-    full_name: 'John Doe'
-  },
-  {
-    full_name: 'Jane Smith'
-  },
-  {
-    full_name: 'Alice Johnson'
-  },
-];
+// Function to insert data
+const insertData = (table, data, callback) => {
+  if (data.length === 0) return callback();
 
-const timesheets = [
-  {
-    employee_id: 1,
-    start_time: '2025-02-10 08:00:00',
-    end_time: '2025-02-10 17:00:00',
-  },
-  {
-    employee_id: 2,
-    start_time: '2025-02-11 12:00:00',
-    end_time: '2025-02-11 17:00:00',
-  },
-  {
-    employee_id: 3,
-    start_time: '2025-02-12 07:00:00',
-    end_time: '2025-02-12 16:00:00',
-  },
-];
-
-
-const insertData = (table, data) => {
   const columns = Object.keys(data[0]).join(', ');
   const placeholders = Object.keys(data[0]).map(() => '?').join(', ');
 
   const insertStmt = db.prepare(`INSERT INTO ${table} (${columns}) VALUES (${placeholders})`);
 
+  let remaining = data.length;
   data.forEach(row => {
-    insertStmt.run(Object.values(row));
+    insertStmt.run(Object.values(row), (err) => {
+      if (err) console.error(`Error inserting into ${table}:`, err);
+      remaining--;
+      if (remaining === 0) {
+        insertStmt.finalize();
+        callback();
+      }
+    });
   });
-
-  insertStmt.finalize();
 };
 
+// Seed database
 db.serialize(() => {
-  insertData('employees', employees);
-  insertData('timesheets', timesheets);
-});
+  console.log("Clearing old data...");
+  db.exec("DELETE FROM employees;");
+  db.exec("DELETE FROM timesheets;", () => {
+    console.log("Seeding employees...");
 
-db.close(err => {
-  if (err) {
-    console.error(err.message);
-  } else {
-    console.log('Database seeded successfully.');
-  }
-});
+    // Generate and insert employees
+    const employees = Array.from({ length: 10 }, () => ({
+      full_name: faker.person.fullName(),
+      email: faker.internet.email(),
+      phone: faker.phone.number(),
+      date_of_birth: faker.date.birthdate({ min: 18, max: 60, mode: "age" }).toISOString().split("T")[0],
+      job_title: faker.person.jobTitle(),
+      department: faker.commerce.department(),
+      salary: faker.number.float({ min: 3000, max: 10000, precision: 2 }),
+      start_date: faker.date.past({ years: 10 }).toISOString().split("T")[0],
+      end_date: Math.random() > 0.8 ? faker.date.future().toISOString().split("T")[0] : null,
+      photo_path: `uploads/photos/${faker.string.uuid()}.jpg`,
+      document_path: `uploads/documents/${faker.string.uuid()}_cv.pdf`
+    }));
 
+    insertData('employees', employees, () => {
+      console.log("Seeding timesheets...");
+
+      // Fetch employees and insert timesheets
+      db.all("SELECT id FROM employees", (err, employeesList) => {
+        if (err) {
+          console.error("Error fetching employees:", err);
+          return db.close();
+        }
+
+        // Generate timesheets for employees
+        const timesheets = employeesList.flatMap(employee => {
+          return Array.from({ length: 2 }, () => ({
+            employee_id: employee.id,
+            start_time: faker.date.recent({ days: 30 }).toISOString(),
+            end_time: faker.date.soon({ days: 1 }).toISOString(),
+            summary: faker.hacker.phrase()
+          }));
+        });
+
+        insertData('timesheets', timesheets, () => {
+          console.log("Database seeded successfully.");
+          db.close(err => {
+            if (err) {
+              console.error("Error closing database:", err.message);
+            }
+          });
+        });
+      });
+    });
+  });
+});
